@@ -1,6 +1,5 @@
 /* eslint-disable no-console */
 
-
 /**
  * - Databases are comprised by Tables
  * - Tables are comprised by Records
@@ -102,9 +101,9 @@ function Table(tableId) {
 }
 
 function Transaction(tablesSource) {
-  const tables = tablesSource.map(table => table.slice());
+  const tables = tablesSource.map((table) => table.slice());
   const index = tablesSource.reduce((previous, current) => ({ [current.id]: current, ...previous }), {});
-  this.Table = label => tables.find(table => table.label === label);
+  this.Table = (label) => tables.find((table) => table.label === label);
   this.Table = (tableId) => {
 
   };
