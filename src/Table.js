@@ -17,18 +17,18 @@ function Table2(tableId) {
 }
 
 function Table() {
-  const fields = ['id', 'name', 'age'];
+  const fields = ['id', 'name', 'age']; // needs to be sorted
   const records = [];
   const index = {};
   this.insert = (item) => {
-    const keys = Object.keys(item);
-    const record = new Array(fields.length);
+    const keys = Object.keys(item); // item var needs type checks
+    const record = new Array(fields.length); // fixed-length initialization = fast
     for (let i = 0, l = fields.length; i < l; i += 1) {
       const field = fields[i];
       if (item[field] === undefined) {
-        record[i] = undefined;
+        record[i] = undefined; // holes makes things slow
       } else {
-        record[i] = item[field];
+        record[i] = item[field]; // also needs type-checks
         keys.splice(keys.indexOf(field), 1);
       }
     }
