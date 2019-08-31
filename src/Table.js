@@ -21,21 +21,35 @@ function Table() {
   const records = [];
   const index = {};
   this.insert = (item) => {
-    const keys = Object.keys(item); // item var needs type checks
-    const record = new Array(fields.length); // fixed-length initialization = fast
+    // item var needs type checks
+    const keys = Object.keys(item);
+
+    // fixed-length initialization = fast
+    const record = new Array(fields.length);
+
     for (let i = 0, l = fields.length; i < l; i += 1) {
       const field = fields[i];
       if (item[field] === undefined) {
-        record[i] = undefined; // holes makes things slow
+        // holes makes things slow
+        record[i] = undefined;
       } else {
-        record[i] = item[field]; // also needs type-checks
+        // also needs type-checks
+        record[i] = item[field];
+
+        // O(N) but shouldn't be an issue with our very small array
         keys.splice(keys.indexOf(field), 1);
       }
     }
+
+    // throw error
     if (keys.length > 0) {
       throw Error('Unexpected key in item!');
     }
+
+    // push item to array
     records.push(record);
+
+    // map item to index
     index[item.id] = record;
   };
   this.records = () => console.log({ records, index });
