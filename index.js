@@ -2,6 +2,7 @@
 
 const zlib = require('zlib');
 const util = require('util');
+const crypto = require('crypto');
 const fs = require('fs');
 
 const Compression = {
@@ -97,11 +98,15 @@ const Query = {
 };
 
 function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
+  // PARAMETER TYPE CHECKS
   if (isValidNonEmptyString(label) === false) {
     throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): 1st parameter "label" must be a non-empty string.`);
   }
   if (isValidObject(itemSchema) === false) {
     throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): 2nd parameter "itemSchema" must be a plain object.`);
+  }
+  if (itemSchema.id !== undefined) {
+    throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): "id" property in 2nd parameter "itemSchema" must be undefined.`);
   }
   if (initialSaveTimeout !== undefined && isValidInteger(initialSaveTimeout) === false) {
     throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): 3rd parameter "initialSaveTimeout" must be an integer.`);
@@ -109,11 +114,15 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   if (forcedSaveTimeout !== undefined && isValidInteger(forcedSaveTimeout) === false) {
     throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): 3rd parameter "forcedSaveTimeout" must be an integer.`);
   }
+
+  // INTERNAL VARIABLES
   const internalOldPath = `./tables/${label}-old.json`;
   const internalTempPath = `./tables/${label}-temp.json`;
   const internalMainPath = `./tables/${label}-main.json`;
   const internalDataList = [];
   const internalDataDictionary = {};
+
+  // FILE LOADING & INITIALIZATION
   if (fs.existsSync('./tables') === false) {
     fs.mkdirSync('./tables', { recursive: true });
     console.log('Table: "./tables" directory created.');
@@ -138,20 +147,27 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     fs.writeFileSync(internalMainPath, JSON.stringify(internalDataList));
     console.log(`Table: File created at "${internalMainPath}".`);
   }
-  const internalItemFields = Object.keys(itemSchema);
-  const internalItemFieldTypes = {};
-  const internalItemFieldReverseIndex = {};
+
+  // MORE INTERNAL VARIABLES
+  const internalItemFields = ['id', ...Object.keys(itemSchema)];
+  const internalItemFieldReverseIndex = { id: 0 };
+  const internalItemFieldTypes = { id: 'string' };
+  const internalItemFieldTypesReverseIndex = { 0: 'string' };
   const internalInitialSaveTimeout = initialSaveTimeout || 5000;
   const internalForcedSaveTimeout = forcedSaveTimeout || 300000;
-  for (let i = 0, l = internalItemFields.length; i < l; i += 1) {
+  for (let i = 1, l = internalItemFields.length; i <= l; i += 1) {
+    // i =1 & i <= l since we want to skip first field: "id"
     const itemField = internalItemFields[i];
     const itemFieldType = itemSchema[itemField];
     if (acceptedItemFieldTypes.includes(itemFieldType) === false) {
       throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): Unexpected "${itemFieldType}" type for "${itemField}" field, expecting "${acceptedItemFieldTypes.join(', ')}"`);
     }
-    internalItemFieldTypes[itemField] = itemFieldType;
     internalItemFieldReverseIndex[itemField] = i;
+    internalItemFieldTypes[itemField] = itemFieldType;
+    internalItemFieldTypesReverseIndex[i] = itemFieldType;
   }
+
+  // TIMEOUT-BASED SAVING
   let internalCurrentSaveTimeout;
   let internalCurrentForceSaveTimeout;
   process.on('SIGINT', () => {
@@ -196,6 +212,8 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
       internalCurrentForceSaveTimeout = undefined;
     }, internalInitialSaveTimeout);
   };
+
+  // PUBLIC FUNCTIONS
   this.queryItems = (resultLimit, resultPageOffset) => {
     if (isValidInteger(resultLimit) === false) {
       throw Error(`queryItems(${resultLimit}, ${resultPageOffset}): 1st parameter "resultLimit" must be an integer.`);
@@ -205,7 +223,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     }
     return internalDataList.slice(resultLimit * resultPageOffset, (resultLimit * resultPageOffset) + resultLimit);
   };
-  this.incrementItemField = (itemId, itemField) => {
+  this.increment = (itemId, itemField) => {
     if (isValidNonEmptyString(itemId) === false) {
       throw Error(`incrementItemField(${itemId}, ${itemField}): 1st parameter "itemId" must be a non-empty string.`);
     }
@@ -226,44 +244,71 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     internalInitSaveTimeout();
     return this;
   };
-  this.insertItem = (itemId, ...itemFieldValues) => {
-    if (isValidNonEmptyString(itemId) === false) {
-      throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): 1st parameter "itemId" must be a non-empty string.`);
-    }
-    if (itemFieldValues.length !== internalItemFields.length) {
-      throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): Succeeding parameters "itemFieldValues" must be ${internalItemFields.length}, got ${itemFieldValues.length}; expecting completeness for "${internalItemFields.join(', ')}"`);
-    }
-    const existingItem = internalDataDictionary[itemId];
-    if (existingItem !== undefined) {
-      throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): "${itemId}" itemId already exists.`);
-    }
+  this.insert = (itemSource) => {
+    const itemSourceKeys = Object.keys(itemSource);
+    const itemRecord = new Array(internalItemFields.length);
     for (let i = 0, l = internalItemFields.length; i < l; i += 1) {
-      switch (internalItemFieldTypes[internalItemFields[i]]) {
-        case 'boolean': {
-          if (typeof itemFieldValues[i] !== 'boolean') {
-            throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): Parameter # ${i + 1} for "${internalItemFields[i]}" field must be a boolean.`);
-          }
-          break;
-        }
+      const itemField = internalItemFields[i];
+      const itemFieldType = internalItemFieldTypes[i];
+      const itemSourceFieldValue = itemSource[itemField];
+      switch (itemFieldType) {
         case 'number': {
-          if (isValidNumber(itemFieldValues[i]) === false) {
-            throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): Parameter # ${i + 1} for "${internalItemFields[i]}" field must be a number.`);
+          if (itemSourceFieldValue === undefined) {
+            itemRecord[i] = 0;
+            break;
+          }
+          if (isValidNumber(itemSourceFieldValue) === false) {
+            throw Error('insert :: expecting number');
           }
           break;
         }
         case 'string': {
-          if (typeof itemFieldValues[i] !== 'string') {
-            throw Error(`insertItem(${itemId}, ${itemFieldValues.join(', ')}): Parameter # ${i + 1} for "${internalItemFields[i]}" field must be a string.`);
+          if (itemSourceFieldValue === undefined) {
+            if (itemField === 'id') {
+              // TODO: LOOP-CHECK TO PREVENT DUPLICATE ID
+              itemRecord[i] = crypto.randomBytes(16).toString('hex');
+              break;
+            }
+            itemRecord[i] = '';
+            break;
+          }
+          if (typeof itemSourceFieldValue !== 'string') {
+            throw Error('insert :: expecting string');
+          }
+          if (itemField === 'id') {
+            if (itemSourceFieldValue === '') {
+              throw Error('insert :: expecting non-empty id');
+            }
+            if (internalDataDictionary[itemSourceFieldValue] !== undefined) {
+              throw Error('insert :: expecting non-existing id');
+            }
+          }
+          break;
+        }
+        case 'boolean': {
+          if (itemSourceFieldValue === undefined) {
+            itemRecord[i] = false;
+            break;
+          }
+          if (typeof itemSourceFieldValue !== 'boolean') {
+            throw Error('insert :: expecting boolean');
           }
           break;
         }
         default: {
-          throw Error(`insertItem :: Internal Error :: Unexpected "${internalItemFieldTypes[i]}" in "internalItemFieldTypes"`);
+          throw Error('insert :: internal error, unexpected type.');
         }
       }
+      if (itemSourceFieldValue !== undefined) {
+        itemRecord[i] = itemSourceFieldValue;
+        itemSourceKeys.splice(itemSourceKeys.indexOf(itemField), 1);
+      }
     }
-    internalDataList.push([itemId, ...itemFieldValues]);
-    internalDataDictionary[itemId] = internalDataList[internalDataList.length - 1];
+    if (itemSourceKeys.length > 0) {
+      throw Error('insert :: unexpected key');
+    }
+    internalDataList.push(itemRecord);
+    internalDataDictionary[itemRecord[0]] = internalDataList[internalDataList.length - 1];
     internalInitSaveTimeout();
     return this;
   };
