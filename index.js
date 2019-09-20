@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console, no-continue */
 
 const zlib = require('zlib');
 const util = require('util');
@@ -149,22 +149,24 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   }
 
   // MORE INTERNAL VARIABLES
-  const internalItemFields = ['id', ...Object.keys(itemSchema)];
-  const internalItemFieldReverseIndex = { id: 0 };
-  const internalItemFieldTypes = { id: 'string' };
-  const internalItemFieldTypesReverseIndex = { 0: 'string' };
+  const internalItemFieldList = ['id', ...Object.keys(itemSchema)];
+  const internalItemFieldDictionary = { id: 0 };
+  const internalItemFieldTypeList = ['string'];
+  const internalItemFieldTypeDictionary = { id: 'string' };
   const internalInitialSaveTimeout = initialSaveTimeout || 5000;
   const internalForcedSaveTimeout = forcedSaveTimeout || 300000;
-  for (let i = 1, l = internalItemFields.length; i <= l; i += 1) {
-    // i =1 & i <= l since we want to skip first field: "id"
-    const itemField = internalItemFields[i];
+  for (let i = 0, l = internalItemFieldList.length; i < l; i += 1) {
+    const itemField = internalItemFieldList[i];
+    if (itemField === 'id') {
+      continue;
+    }
     const itemFieldType = itemSchema[itemField];
     if (acceptedItemFieldTypes.includes(itemFieldType) === false) {
       throw Error(`new Table(${label}, ${JSON.stringify(itemSchema)}, ${initialSaveTimeout}, ${forcedSaveTimeout}): Unexpected "${itemFieldType}" type for "${itemField}" field, expecting "${acceptedItemFieldTypes.join(', ')}"`);
     }
-    internalItemFieldReverseIndex[itemField] = i;
-    internalItemFieldTypes[itemField] = itemFieldType;
-    internalItemFieldTypesReverseIndex[i] = itemFieldType;
+    internalItemFieldDictionary[itemField] = i;
+    internalItemFieldTypeList[i] = itemFieldType;
+    internalItemFieldTypeDictionary[itemField] = itemFieldType;
   }
 
   // TIMEOUT-BASED SAVING
@@ -213,43 +215,20 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     }, internalInitialSaveTimeout);
   };
 
-  // PUBLIC FUNCTIONS
-  this.queryItems = (resultLimit, resultPageOffset) => {
-    if (isValidInteger(resultLimit) === false) {
-      throw Error(`queryItems(${resultLimit}, ${resultPageOffset}): 1st parameter "resultLimit" must be an integer.`);
+  // FUNCTIONS
+  this.id = () => {
+    let itemId = crypto.randomBytes(16).toString('hex');
+    while (internalDataDictionary[itemId] !== undefined) {
+      itemId = crypto.randomBytes(16).toString('hex');
     }
-    if (isValidInteger(resultPageOffset) === false) {
-      throw Error(`queryItems(${resultLimit}, ${resultPageOffset}): 2nd parameter "resultPageOffset" must be an integer.`);
-    }
-    return internalDataList.slice(resultLimit * resultPageOffset, (resultLimit * resultPageOffset) + resultLimit);
-  };
-  this.increment = (itemId, itemField) => {
-    if (isValidNonEmptyString(itemId) === false) {
-      throw Error(`incrementItemField(${itemId}, ${itemField}): 1st parameter "itemId" must be a non-empty string.`);
-    }
-    if (isValidNonEmptyString(itemField) === false) {
-      throw Error(`incrementItemField(${itemId}, ${itemField}): 2nd parameter "itemField" must be a non-empty string.`);
-    }
-    if (internalItemFields.includes(itemField) === false) {
-      throw Error(`incrementItemField(${itemId}, ${itemField}): unexpected "${itemField}", expecting "${internalItemFields.join(', ')}"`);
-    }
-    if (internalItemFieldTypes[itemField] !== 'number') {
-      throw Error(`incrementItemField(${itemId}, ${itemField}): unexpected "${itemField}", expecting field with "number" type, not "${internalItemFieldTypes[itemField]}"`);
-    }
-    const existingItem = internalDataDictionary[itemId];
-    if (existingItem === undefined) {
-      throw Error(`incrementItemField(${itemId}, ${itemField}): "${itemId}" itemId not found.`);
-    }
-    existingItem[internalItemFieldReverseIndex[itemField] + 1] += 1;
-    internalInitSaveTimeout();
-    return this;
+    return itemId;
   };
   this.insert = (itemSource) => {
     const itemSourceKeys = Object.keys(itemSource);
-    const itemRecord = new Array(internalItemFields.length);
-    for (let i = 0, l = internalItemFields.length; i < l; i += 1) {
-      const itemField = internalItemFields[i];
-      const itemFieldType = internalItemFieldTypes[i];
+    const itemRecord = new Array(internalItemFieldList.length);
+    for (let i = 0, l = internalItemFieldList.length; i < l; i += 1) {
+      const itemField = internalItemFieldList[i];
+      const itemFieldType = internalItemFieldTypeList[i];
       const itemSourceFieldValue = itemSource[itemField];
       switch (itemFieldType) {
         case 'number': {
@@ -258,29 +237,27 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
             break;
           }
           if (isValidNumber(itemSourceFieldValue) === false) {
-            throw Error('insert :: expecting number');
+            throw Error(`insert :: expecting number for "${itemField}" field`);
           }
           break;
         }
         case 'string': {
           if (itemSourceFieldValue === undefined) {
             if (itemField === 'id') {
-              // TODO: LOOP-CHECK TO PREVENT DUPLICATE ID
-              itemRecord[i] = crypto.randomBytes(16).toString('hex');
-              break;
+              throw Error('insert :: expecting non-undefined "id" field');
             }
             itemRecord[i] = '';
             break;
           }
           if (typeof itemSourceFieldValue !== 'string') {
-            throw Error('insert :: expecting string');
+            throw Error(`insert :: expecting string for "${itemField}" field`);
           }
           if (itemField === 'id') {
             if (itemSourceFieldValue === '') {
-              throw Error('insert :: expecting non-empty id');
+              throw Error('insert :: expecting non-empty "id" field');
             }
             if (internalDataDictionary[itemSourceFieldValue] !== undefined) {
-              throw Error('insert :: expecting non-existing id');
+              throw Error('insert :: expecting non-existing "id" field');
             }
           }
           break;
@@ -291,12 +268,12 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
             break;
           }
           if (typeof itemSourceFieldValue !== 'boolean') {
-            throw Error('insert :: expecting boolean');
+            throw Error(`insert :: expecting boolean for "${itemField}" field`);
           }
           break;
         }
         default: {
-          throw Error('insert :: internal error, unexpected type.');
+          throw Error(`insert :: internal error, unexpected "${itemFieldType}" type.`);
         }
       }
       if (itemSourceFieldValue !== undefined) {
@@ -305,12 +282,65 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
       }
     }
     if (itemSourceKeys.length > 0) {
-      throw Error('insert :: unexpected key');
+      throw Error(`insert :: unexpected "${itemSourceKeys.join(', ')}" fields`);
     }
     internalDataList.push(itemRecord);
     internalDataDictionary[itemRecord[0]] = internalDataList[internalDataList.length - 1];
     internalInitSaveTimeout();
     return this;
+  };
+  this.increment = (itemId, itemField) => {
+    if (isValidNonEmptyString(itemId) === false) {
+      throw Error('incrementItemField :: 1st parameter "itemId" must be a non-empty string.');
+    }
+    if (isValidNonEmptyString(itemField) === false) {
+      throw Error('incrementItemField :: 2nd parameter "itemField" must be a non-empty string.');
+    }
+    if (internalItemFieldList.includes(itemField) === false) {
+      throw Error(`incrementItemField :: unexpected "${itemField}", expecting "${internalItemFieldList.join(', ')}"`);
+    }
+    if (internalItemFieldTypeDictionary[itemField] !== 'number') {
+      throw Error(`incrementItemField :: unexpected "${itemField}", expecting field with "number" type, not "${internalItemFieldTypeDictionary[itemField]}"`);
+    }
+    const existingItem = internalDataDictionary[itemId];
+    if (existingItem === undefined) {
+      throw Error(`incrementItemField :: "${itemId}" itemId not found.`);
+    }
+    existingItem[internalItemFieldDictionary[itemField]] += 1;
+    internalInitSaveTimeout();
+    return this;
+  };
+  this.decrement = (itemId, itemField) => {
+    if (isValidNonEmptyString(itemId) === false) {
+      throw Error('incrementItemField :: 1st parameter "itemId" must be a non-empty string.');
+    }
+    if (isValidNonEmptyString(itemField) === false) {
+      throw Error('incrementItemField :: 2nd parameter "itemField" must be a non-empty string.');
+    }
+    if (internalItemFieldList.includes(itemField) === false) {
+      throw Error(`incrementItemField :: unexpected "${itemField}", expecting "${internalItemFieldList.join(', ')}"`);
+    }
+    if (internalItemFieldTypeDictionary[itemField] !== 'number') {
+      throw Error(`incrementItemField :: unexpected "${itemField}", expecting field with "number" type, not "${internalItemFieldTypeDictionary[itemField]}"`);
+    }
+    const existingItem = internalDataDictionary[itemId];
+    if (existingItem === undefined) {
+      throw Error(`incrementItemField :: "${itemId}" itemId not found.`);
+    }
+    existingItem[internalItemFieldDictionary[itemField]] -= 1;
+    internalInitSaveTimeout();
+    return this;
+  };
+
+  // STALE FUNCTIONS
+  this.queryItems = (resultLimit, resultPageOffset) => {
+    if (isValidInteger(resultLimit) === false) {
+      throw Error(`queryItems(${resultLimit}, ${resultPageOffset}): 1st parameter "resultLimit" must be an integer.`);
+    }
+    if (isValidInteger(resultPageOffset) === false) {
+      throw Error(`queryItems(${resultLimit}, ${resultPageOffset}): 2nd parameter "resultPageOffset" must be an integer.`);
+    }
+    return internalDataList.slice(resultLimit * resultPageOffset, (resultLimit * resultPageOffset) + resultLimit);
   };
   this.removeItem = (itemId) => {
     if (isValidNonEmptyString(itemId) === false) {
@@ -334,7 +364,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
       throw Error(`findItem(${itemId}): "${itemId}" itemId not found.`);
     }
     const tempItem = {};
-    for (let i = 0, l = internalItemFields.length; i < l; i += 1) {
+    for (let i = 0, l = internalItemFieldList.length; i < l; i += 1) {
       tempItem[internalItemFieldReverseIndex[i]] = existingItem[i];
     }
     return tempItem;
@@ -355,4 +385,16 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   };
 }
 
-module.exports = { Table };
+const t = new Table('yeh', { name: 'string', age: 'number', active: 'boolean' });
+const id = t.id();
+t
+  .insert({
+    id,
+    name: 'alice',
+    age: 23,
+    active: true,
+    extraField1: false,
+    extraField2: false,
+  })
+  .increment(id, 'age')
+  .increment(id, 'name');
