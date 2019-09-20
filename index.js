@@ -277,7 +277,7 @@ const Query = {
           if (a[itemPropertyIndex] === b[itemPropertyIndex]) { // If value of both slicedItems are equal: SKIP SORT
             continue;
           } else if (itemPropertyType === 'string') {
-            return shouldDescend ? b[itemPropertyIndex].localeCompare(a[itemPropertyIndex]) : a[itemPropertyIndex].localeCompare(b[property]);
+            return shouldDescend ? b[itemPropertyIndex].localeCompare(a[itemPropertyIndex]) : a[itemPropertyIndex].localeCompare(b[itemPropertyIndex]);
           } else if (itemPropertyType === 'number') {
             return shouldDescend ? b[itemPropertyIndex] - a[itemPropertyIndex] : a[itemPropertyIndex] - b[itemPropertyIndex];
           }
@@ -362,7 +362,8 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   }
 
   // MORE INTERNAL VARIABLES
-  const internalItemPropertyList = ['id', ...Object.keys(itemSchema)];
+  const internalItemPropertyList = ['id', ...Object.keys(itemSchema).sort((a, b) => a.localeCompare(b))];
+  console.log(internalItemPropertyList);
   const internalItemPropertyDictionary = { id: 0 };
   const internalItemPropertyTypeList = ['string'];
   const internalItemPropertyTypeDictionary = { id: 'string' };
@@ -695,7 +696,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
  * - Queries provide strong consistency
  */
 
-const table = new Table('yeh', { age: 'number' }, 500);
+const table = new Table('yeh', { name: 'string', age: 'number' }, 500);
 table.clear();
 
 for (let i = 0, l = 1000; i < l; i += 1) {
