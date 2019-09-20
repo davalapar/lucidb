@@ -91,7 +91,26 @@ const isValidInteger = (value) => {
 let internalQueryDataList;
 let internalQueryDataDictionary;
 let internalQueryFieldList;
+let internalQueryLimit = Infinity;
+let internalQueryOffset = 0;
+let internalQueryPage = 0;
 const Query = {
+  limit: (value) => {
+    internalQueryLimit = value;
+    return Query;
+  },
+  offset: (value) => {
+    // require limit first
+    // page must not be set
+    internalQueryOffset = value;
+    return Query;
+  },
+  page: (value) => {
+    // require limit first
+    // offset must not be set
+    internalQueryPage = value;
+    return Query;
+  },
   results: () => internalQueryDataList.map((existingItem) => {
     const temporaryItem = {};
     for (let i = 0, l = internalQueryFieldList.length; i < l; i += 1) {
@@ -123,8 +142,8 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   const internalOldPath = `./tables/${label}-old.json`;
   const internalTempPath = `./tables/${label}-temp.json`;
   const internalMainPath = `./tables/${label}-main.json`;
-  const internalDataList = [];
-  const internalDataDictionary = {};
+  let internalDataList = [];
+  let internalDataDictionary = {};
 
   // FILE LOADING & INITIALIZATION
   if (fs.existsSync('./tables') === false) {
@@ -233,7 +252,13 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     }
     return itemId;
   };
-  this.insert = (itemSource) => {
+  this.clear = () => {
+    internalDataList = [];
+    internalDataDictionary = {};
+    internalInitSaveTimeout();
+    return this;
+  };
+  this.add = (itemSource) => {
     const itemSourceKeys = Object.keys(itemSource);
     const itemRecord = new Array(internalItemFieldList.length);
     for (let i = 0, l = internalItemFieldList.length; i < l; i += 1) {
@@ -247,27 +272,27 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
             break;
           }
           if (isValidNumber(itemSourceFieldValue) === false) {
-            throw Error(`insert :: expecting number for "${itemField}" field`);
+            throw Error(`add :: expecting number for "${itemField}" field`);
           }
           break;
         }
         case 'string': {
           if (itemSourceFieldValue === undefined) {
             if (itemField === 'id') {
-              throw Error('insert :: expecting non-undefined "id" field');
+              throw Error('add :: expecting non-undefined "id" field');
             }
             itemRecord[i] = '';
             break;
           }
           if (typeof itemSourceFieldValue !== 'string') {
-            throw Error(`insert :: expecting string for "${itemField}" field`);
+            throw Error(`add :: expecting string for "${itemField}" field`);
           }
           if (itemField === 'id') {
             if (itemSourceFieldValue === '') {
-              throw Error('insert :: expecting non-empty "id" field');
+              throw Error('add :: expecting non-empty "id" field');
             }
             if (internalDataDictionary[itemSourceFieldValue] !== undefined) {
-              throw Error('insert :: expecting non-existing "id" field');
+              throw Error('add :: expecting non-existing "id" field');
             }
           }
           break;
@@ -278,12 +303,12 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
             break;
           }
           if (typeof itemSourceFieldValue !== 'boolean') {
-            throw Error(`insert :: expecting boolean for "${itemField}" field`);
+            throw Error(`add :: expecting boolean for "${itemField}" field`);
           }
           break;
         }
         default: {
-          throw Error(`insert :: internal error, unexpected "${itemFieldType}" type.`);
+          throw Error(`add :: internal error, unexpected "${itemFieldType}" type.`);
         }
       }
       if (itemSourceFieldValue !== undefined) {
@@ -292,7 +317,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
       }
     }
     if (itemSourceKeys.length > 0) {
-      throw Error(`insert :: unexpected "${itemSourceKeys.join(', ')}" fields`);
+      throw Error(`add :: unexpected "${itemSourceKeys.join(', ')}" fields`);
     }
     internalDataList.push(itemRecord);
     internalDataDictionary[itemRecord[0]] = itemRecord;
@@ -344,12 +369,12 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
             break;
           }
           if (typeof itemSourceFieldValue !== 'boolean') {
-            throw Error(`insert :: expecting boolean for "${itemField}" field`);
+            throw Error(`add :: expecting boolean for "${itemField}" field`);
           }
           break;
         }
         default: {
-          throw Error(`insert :: internal error, unexpected "${itemFieldType}" type.`);
+          throw Error(`add :: internal error, unexpected "${itemFieldType}" type.`);
         }
       }
       if (itemSourceFieldValue !== undefined) {
@@ -358,7 +383,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
       }
     }
     if (itemSourceKeys.length > 0) {
-      throw Error(`insert :: unexpected "${itemSourceKeys.join(', ')}" fields`);
+      throw Error(`add :: unexpected "${itemSourceKeys.join(', ')}" fields`);
     }
     const itemId = itemRecord[0];
     const existingItem = internalDataDictionary[itemId];
@@ -367,13 +392,13 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     internalInitSaveTimeout();
     return this;
   };
-  this.fetch = (itemId) => {
+  this.get = (itemId) => {
     if (isValidNonEmptyString(itemId) === false) {
-      throw Error('fetch :: 1st parameter "itemId" must be a non-empty string.');
+      throw Error('get :: 1st parameter "itemId" must be a non-empty string.');
     }
     const existingItem = internalDataDictionary[itemId];
     if (existingItem === undefined) {
-      throw Error(`fetch :: "${itemId}" itemId not found.`);
+      throw Error(`get :: "${itemId}" itemId not found.`);
     }
     const temporaryItem = {};
     for (let i = 0, l = internalItemFieldList.length; i < l; i += 1) {
@@ -381,13 +406,13 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     }
     return temporaryItem;
   };
-  this.remove = (itemId) => {
+  this.delete = (itemId) => {
     if (isValidNonEmptyString(itemId) === false) {
-      throw Error('remove :: 1st parameter "itemId" must be a non-empty string.');
+      throw Error('delete :: 1st parameter "itemId" must be a non-empty string.');
     }
     const existingItem = internalDataDictionary[itemId];
     if (existingItem === undefined) {
-      throw Error(`remove :: "${itemId}" itemId not found.`);
+      throw Error(`delete :: "${itemId}" itemId not found.`);
     }
     internalDataList.splice(internalDataList.indexOf(existingItem), 1);
     delete internalDataDictionary[itemId];
@@ -436,9 +461,9 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     internalInitSaveTimeout();
     return this;
   };
-  this.includes = (itemId) => {
+  this.has = (itemId) => {
     if (isValidNonEmptyString(itemId) === false) {
-      throw Error('includes :: 1st parameter "itemId" must be a non-empty string.');
+      throw Error('has :: 1st parameter "itemId" must be a non-empty string.');
     }
     return internalDataDictionary[itemId] !== undefined;
   };
@@ -455,25 +480,27 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   };
 }
 
+
 /**
- * - insert, increment, decrement, includes, remove, fetch, query
+ * - add, increment, decrement, has, delete, get, query
  * - Consistent base types: string, number, boolean
  * - Automatic defaults, string: '', number: 0, boolean: false
  * - Queries are designed to be used synchronously
  * - Queries provide strong consistency
  */
 
-const t = new Table('yeh', { name: 'string', age: 'number', active: 'boolean' });
+const t = new Table('yeh', { name: 'string', age: 'number', active: 'boolean' }, 100);
 const id = t.id();
 t
-  .insert({
+  .add({
     id,
     name: 'alice',
     age: 23,
     active: true,
   })
   .increment(id, 'age');
-console.log(t.includes(id));
-console.log(t.fetch(id));
-t.remove(id);
-console.log(t.includes(id));
+console.log(t.has(id));
+console.log(t.get(id));
+t.delete(id);
+console.log(t.has(id));
+t.clear();
