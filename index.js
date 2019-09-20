@@ -235,21 +235,32 @@ const Query = {
 
   // PAGINATION
   limit: (value) => {
-    // value integer, greater than zero
+    if (isValidInteger(value) === false || value <= 0) {
+      throw Error('limit :: expecting "value" to be a valid integer greater than zero');
+    }
     internalQueryLimit = value;
     return Query;
   },
   offset: (value) => {
-    // require limit first
-    // page must not be set
-    // value integer, greater than zero
+    if (internalQueryPage !== 0) {
+      throw Error('page :: cannot use offset() with page()');
+    }
+    if (isValidInteger(value) === false || value <= 0) {
+      throw Error('offset :: expecting "value" to be a valid integer greater than zero');
+    }
     internalQueryOffset = value;
     return Query;
   },
   page: (value) => {
-    // require limit first
-    // offset must not be set
-    // value integer, greater than zero
+    if (Number.isFinite(internalQueryLimit) === false) {
+      throw Error('page :: limit() must be called first before offset');
+    }
+    if (internalQueryOffset !== 0) {
+      throw Error('page :: cannot use page() with offset()');
+    }
+    if (isValidInteger(value) === false || value <= 0) {
+      throw Error('page :: expecting "value" to be a valid integer greater than zero');
+    }
     internalQueryPage = value;
     return Query;
   },
@@ -259,14 +270,12 @@ const Query = {
     // apply sorts and filters
 
     // apply pagination
-    if (Number.isFinite(internalQueryLimit) === true) {
-      if (internalQueryOffset > 0) {
-        internalQueryDataList = internalQueryDataList.slice(internalQueryOffset, internalQueryOffset + internalQueryLimit);
-      } else if (internalQueryPage > 0) {
-        internalQueryDataList = internalQueryDataList.slice(internalQueryLimit * internalQueryPage, (internalQueryLimit * internalQueryPage) + internalQueryLimit);
-      } else {
-        internalQueryDataList = internalQueryDataList.slice(0, internalQueryLimit);
-      }
+    if (internalQueryOffset > 0) {
+      internalQueryDataList = internalQueryDataList.slice(internalQueryOffset, internalQueryOffset + internalQueryLimit);
+    } else if (internalQueryPage > 0) {
+      internalQueryDataList = internalQueryDataList.slice(internalQueryLimit * internalQueryPage, (internalQueryLimit * internalQueryPage) + internalQueryLimit);
+    } else {
+      internalQueryDataList = internalQueryDataList.slice(0, internalQueryLimit);
     }
 
     // hydrate and return
@@ -661,8 +670,8 @@ for (let i = 0, l = 100; i < l; i += 1) {
 }
 const results = table
   .query()
-  .gt('age', 5)
-  .limit(10)
+  .limit(2)
+  .page(2)
   .results();
 console.log(results);
 
