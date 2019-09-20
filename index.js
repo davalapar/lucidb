@@ -96,28 +96,43 @@ let internalQueryOffset = 0;
 let internalQueryPage = 0;
 const Query = {
   limit: (value) => {
+    // value integer, greater than zero
     internalQueryLimit = value;
     return Query;
   },
   offset: (value) => {
     // require limit first
     // page must not be set
+    // value integer, greater than zero
     internalQueryOffset = value;
     return Query;
   },
   page: (value) => {
     // require limit first
     // offset must not be set
+    // value integer, greater than zero
     internalQueryPage = value;
     return Query;
   },
-  results: () => internalQueryDataList.map((existingItem) => {
-    const temporaryItem = {};
-    for (let i = 0, l = internalQueryFieldList.length; i < l; i += 1) {
-      temporaryItem[internalQueryFieldList[i]] = existingItem[i];
+  results: () => {
+    let hydratedItems = internalQueryDataList.map((existingItem) => {
+      const temporaryItem = {};
+      for (let i = 0, l = internalQueryFieldList.length; i < l; i += 1) {
+        temporaryItem[internalQueryFieldList[i]] = existingItem[i];
+      }
+      return temporaryItem;
+    });
+    if (Number.isFinite(internalQueryLimit) === true) {
+      if (internalQueryOffset > 0) {
+        hydratedItems = hydratedItems.slice(internalQueryOffset, internalQueryOffset + internalQueryLimit);
+      } else if (internalQueryPage > 0) {
+        hydratedItems = hydratedItems.slice(internalQueryLimit * internalQueryPage, (internalQueryLimit * internalQueryPage) + internalQueryLimit);
+      } else {
+        hydratedItems = hydratedItems.slice(0, internalQueryLimit);
+      }
     }
-    return temporaryItem;
-  }),
+    return hydratedItems;
+  },
 };
 
 function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
@@ -243,6 +258,9 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     internalQueryDataList = internalDataList;
     internalQueryDataDictionary = internalDataDictionary;
     internalQueryFieldList = internalItemFieldList;
+    internalQueryLimit = Infinity;
+    internalQueryOffset = 0;
+    internalQueryPage = 0;
     return Query;
   };
   this.id = () => {
@@ -489,18 +507,15 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
  * - Queries provide strong consistency
  */
 
-const t = new Table('yeh', { name: 'string', age: 'number', active: 'boolean' }, 100);
-const id = t.id();
-t
-  .add({
-    id,
-    name: 'alice',
-    age: 23,
-    active: true,
-  })
-  .increment(id, 'age');
-console.log(t.has(id));
-console.log(t.get(id));
-t.delete(id);
-console.log(t.has(id));
-t.clear();
+const table = new Table('yeh', { age: 'number' }, 100);
+
+for (let i = 0, l = 100; i < l; i += 1) {
+  table.add({ id: table.id(), age: i });
+}
+const results = table
+  .query()
+  .limit(10)
+  .results();
+console.log(results);
+
+table.clear();
