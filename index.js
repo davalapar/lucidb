@@ -90,6 +90,7 @@ const isValidInteger = (value) => {
 
 let internalQueryDataList;
 let internalQueryItemFieldDictionary;
+let internalQueryItemFieldTypeDictionary;
 let internalQueryFieldList;
 let internalQueryLimit = Infinity;
 let internalQueryOffset = 0;
@@ -108,6 +109,9 @@ const Query = {
     }
     if (internalQueryFieldList.includes(field) === false) {
       throw Error(`gt :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    if (internalQueryItemFieldTypeDictionary[field] !== 'number') {
+      throw Error(`gt :: unexpected "${field}", expecting field with "number" type, not "${internalQueryItemFieldTypeDictionary[field]}""`);
     }
     const tempQueryDataList = internalQueryDataList;
     internalQueryDataList = [];
@@ -129,6 +133,9 @@ const Query = {
     if (internalQueryFieldList.includes(field) === false) {
       throw Error(`gte :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
     }
+    if (internalQueryItemFieldTypeDictionary[field] !== 'number') {
+      throw Error(`gte :: unexpected "${field}", expecting field with "number" type, not "${internalQueryItemFieldTypeDictionary[field]}""`);
+    }
     const tempQueryDataList = internalQueryDataList;
     internalQueryDataList = [];
     const itemFieldIndex = internalQueryItemFieldDictionary[field];
@@ -148,6 +155,9 @@ const Query = {
     }
     if (internalQueryFieldList.includes(field) === false) {
       throw Error(`lt :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    if (internalQueryItemFieldTypeDictionary[field] !== 'number') {
+      throw Error(`lt :: unexpected "${field}", expecting field with "number" type, not "${internalQueryItemFieldTypeDictionary[field]}""`);
     }
     const tempQueryDataList = internalQueryDataList;
     internalQueryDataList = [];
@@ -169,11 +179,54 @@ const Query = {
     if (internalQueryFieldList.includes(field) === false) {
       throw Error(`lte :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
     }
+    if (internalQueryItemFieldTypeDictionary[field] !== 'number') {
+      throw Error(`lte :: unexpected "${field}", expecting field with "number" type, not "${internalQueryItemFieldTypeDictionary[field]}""`);
+    }
     const tempQueryDataList = internalQueryDataList;
     internalQueryDataList = [];
     const itemFieldIndex = internalQueryItemFieldDictionary[field];
     for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
       if (tempQueryDataList[i][itemFieldIndex] <= value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+  eq: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('eq :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('eq :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`eq :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] === value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+  neq: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('neq :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('neq :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`neq :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] !== value) {
         internalQueryDataList.push(tempQueryDataList[i]);
       }
     }
@@ -351,6 +404,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
     internalQueryDataList = internalDataList;
     internalQueryItemFieldDictionary = internalItemFieldDictionary;
     internalQueryFieldList = internalItemFieldList;
+    internalQueryItemFieldTypeDictionary = internalItemFieldTypeDictionary;
     internalQueryLimit = Infinity;
     internalQueryOffset = 0;
     internalQueryPage = 0;
@@ -607,8 +661,7 @@ for (let i = 0, l = 100; i < l; i += 1) {
 }
 const results = table
   .query()
-  .gte('age', 5)
-  .lte('age', 10)
+  .gt('age', 5)
   .limit(10)
   .results();
 console.log(results);
