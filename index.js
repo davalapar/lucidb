@@ -89,12 +89,98 @@ const isValidInteger = (value) => {
  */
 
 let internalQueryDataList;
-let internalQueryDataDictionary;
+let internalQueryItemFieldDictionary;
 let internalQueryFieldList;
 let internalQueryLimit = Infinity;
 let internalQueryOffset = 0;
 let internalQueryPage = 0;
 const Query = {
+
+  // SORTS
+
+  // FILTERS
+  gt: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('gt :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('gt :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`gt :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] > value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+  gte: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('gte :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('gte :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`gte :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] >= value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+  lt: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('lt :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('lt :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`lt :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] < value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+  lte: (field, value) => {
+    if (isValidNonEmptyString(field) === false) {
+      throw Error('lte :: 1st parameter "field" must be a non-empty string');
+    }
+    if (isValidNumber(value) === false) {
+      throw Error('lte :: 2nd parameter "value" must be a valid number');
+    }
+    if (internalQueryFieldList.includes(field) === false) {
+      throw Error(`lte :: unexpected field "${field}", expecting "${internalQueryFieldList.join(', ')}"`);
+    }
+    const tempQueryDataList = internalQueryDataList;
+    internalQueryDataList = [];
+    const itemFieldIndex = internalQueryItemFieldDictionary[field];
+    for (let i = 0, l = tempQueryDataList.length; i < l; i += 1) {
+      if (tempQueryDataList[i][itemFieldIndex] <= value) {
+        internalQueryDataList.push(tempQueryDataList[i]);
+      }
+    }
+    return Query;
+  },
+
+  // PAGINATION
   limit: (value) => {
     // value integer, greater than zero
     internalQueryLimit = value;
@@ -114,23 +200,30 @@ const Query = {
     internalQueryPage = value;
     return Query;
   },
+
+  // RESULTS
   results: () => {
-    let hydratedItems = internalQueryDataList.map((existingItem) => {
+    // apply sorts and filters
+
+    // apply pagination
+    if (Number.isFinite(internalQueryLimit) === true) {
+      if (internalQueryOffset > 0) {
+        internalQueryDataList = internalQueryDataList.slice(internalQueryOffset, internalQueryOffset + internalQueryLimit);
+      } else if (internalQueryPage > 0) {
+        internalQueryDataList = internalQueryDataList.slice(internalQueryLimit * internalQueryPage, (internalQueryLimit * internalQueryPage) + internalQueryLimit);
+      } else {
+        internalQueryDataList = internalQueryDataList.slice(0, internalQueryLimit);
+      }
+    }
+
+    // hydrate and return
+    const hydratedItems = internalQueryDataList.map((existingItem) => {
       const temporaryItem = {};
       for (let i = 0, l = internalQueryFieldList.length; i < l; i += 1) {
         temporaryItem[internalQueryFieldList[i]] = existingItem[i];
       }
       return temporaryItem;
     });
-    if (Number.isFinite(internalQueryLimit) === true) {
-      if (internalQueryOffset > 0) {
-        hydratedItems = hydratedItems.slice(internalQueryOffset, internalQueryOffset + internalQueryLimit);
-      } else if (internalQueryPage > 0) {
-        hydratedItems = hydratedItems.slice(internalQueryLimit * internalQueryPage, (internalQueryLimit * internalQueryPage) + internalQueryLimit);
-      } else {
-        hydratedItems = hydratedItems.slice(0, internalQueryLimit);
-      }
-    }
     return hydratedItems;
   },
 };
@@ -256,7 +349,7 @@ function Table(label, itemSchema, initialSaveTimeout, forcedSaveTimeout) {
   // FUNCTIONS
   this.query = () => {
     internalQueryDataList = internalDataList;
-    internalQueryDataDictionary = internalDataDictionary;
+    internalQueryItemFieldDictionary = internalItemFieldDictionary;
     internalQueryFieldList = internalItemFieldList;
     internalQueryLimit = Infinity;
     internalQueryOffset = 0;
@@ -514,6 +607,8 @@ for (let i = 0, l = 100; i < l; i += 1) {
 }
 const results = table
   .query()
+  .gte('age', 5)
+  .lte('age', 10)
   .limit(10)
   .results();
 console.log(results);
