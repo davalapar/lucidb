@@ -269,7 +269,6 @@ const Query = {
   results: () => {
     // apply sorts and filters
     if (internalQuerySorts.length > 0) {
-      console.log(internalQuerySorts);
       internalQueryDataList.sort((a, b) => {
         for (let i = 0, l = internalQuerySorts.length; i < l; i += 1) {
           const [itemProperty, shouldDescend] = internalQuerySorts[i];
